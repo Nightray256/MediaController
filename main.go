@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	_ "embed"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -24,9 +25,16 @@ import (
 
 var hideWindowSysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
+//go:embed icon.png
+var iconBytes []byte
+
 func main() {
 	a := app.NewWithID("iRay")
-	w := a.NewWindow("Media Compressor")
+
+	icon := fyne.NewStaticResource("icon", iconBytes)
+	a.SetIcon(icon)
+
+	w := a.NewWindow("Media Cotroller")
 	w.Resize(fyne.NewSize(680, 480))
 
 	var selectedVideoPath string
