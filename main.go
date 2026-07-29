@@ -220,13 +220,12 @@ func main() {
 	ytProgressBar.SetValue(0.0)
 
 	formatSelect := widget.NewSelect([]string{
-		"Best Video (Auto)",
 		"1080p Video",
 		"720p Video",
 		"480p Video",
 		"Audio Only (MP3)",
 	}, nil)
-	formatSelect.SetSelected("Best Video (Auto)")
+	formatSelect.SetSelected("1080p Video")
 
 	selectFolderBtn := widget.NewButton("Select Download Folder", func() {
 		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
