@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -8,8 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -18,6 +21,8 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 )
+
+var hideWindowSysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
 func main() {
 	a := app.NewWithID("iRay")
@@ -197,9 +202,84 @@ func main() {
 		photoStatusLabel,
 	)
 
+	var downloadFolder string
+	ytUrlEntry := widget.NewEntry()
+	ytUrlEntry.SetPlaceHolder("Enter YouTube URL")
+	ytFolderLabel := widget.NewLabel("No folder selected")
+	ytStatusLabel := widget.NewLabel("Status: Ready")
+
+	ytProgressBar := widget.NewProgressBar()
+	ytProgressBar.SetValue(0.0)
+
+	formatSelect := widget.NewSelect([]string{
+		"Best Video (Auto)",
+		"1080p Video",
+		"720p Video",
+		"480p Video",
+		"Audio Only (MP3)",
+	}, nil)
+	formatSelect.SetSelected("Best Video (Auto)")
+
+	selectFolderBtn := widget.NewButton("Select Download Folder", func() {
+		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
+			if err != nil || uri == nil {
+				return
+			}
+			downloadFolder = uri.Path()
+			ytFolderLabel.SetText(fmt.Sprintf("Selected Folder: %s", downloadFolder))
+		}, w)
+	})
+
+	downloadBtn := widget.NewButton("Download YouTube Video", func() {
+		url := ytUrlEntry.Text
+		if url == "" {
+			dialog.ShowInformation("Missing URL", "Please enter a YouTube URL.", w)
+			return
+		}
+		if downloadFolder == "" {
+			dialog.ShowInformation("Missing folder", "Please select a download folder.", w)
+			return
+		}
+
+		ytStatusLabel.SetText("Status: Downloading...")
+		ytProgressBar.SetValue(0.0)
+
+		selectedFormat := formatSelect.Selected
+
+		go func() {
+			err := downloadYTVideo(url, downloadFolder, selectedFormat, func(progress float64) {
+
+				ytProgressBar.SetValue(progress)
+			})
+
+			if err != nil {
+				ytStatusLabel.SetText(fmt.Sprintf("Status: Download failed: (%v)", err))
+				dialog.ShowError(err, w)
+			} else {
+				ytStatusLabel.SetText("Status: Download completed.")
+				dialog.ShowInformation("Download completed", "Video has been saved successfully.", w)
+			}
+		}()
+	})
+
+	ytUI := container.NewVBox(
+		widget.NewLabel("Enter YouTube URL"),
+		ytUrlEntry,
+		widget.NewLabel(""),
+		widget.NewLabel("Select Destination Folder"),
+		formatSelect,
+		selectFolderBtn,
+		ytFolderLabel,
+		widget.NewLabel(""),
+		downloadBtn,
+		ytProgressBar,
+		ytStatusLabel,
+	)
+
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Video", videoUI),
 		container.NewTabItem("Photo", photoUI),
+		container.NewTabItem("YouTube", ytUI),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 
@@ -277,4 +357,63 @@ func processPhotoFile(inputPath, outputPath, widthStr, heightStr string) error {
 
 	err = cmd.Run()
 	return err
+}
+
+func downloadYTVideo(url, outputFolder, formatChoice string, updateProgress func(progress float64)) error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	exeDir := filepath.Dir(exePath)
+	ytdlpPath := filepath.Join(exeDir, "yt-dlp.exe")
+
+	if _, err := os.Stat(ytdlpPath); os.IsNotExist(err) {
+		return fmt.Errorf("yt-dlp executable not found in the current directory")
+	}
+
+	outputTemplate := filepath.Join(outputFolder, "%(title)s.%(ext)s")
+
+	var args []string
+
+	switch formatChoice {
+	case "1080p Video":
+		args = []string{"-f", "bestvideo[height<=1080]+bestaudio/best", "--merge-output-format", "mp4", "-o", outputTemplate, url}
+	case "720p Video":
+		args = []string{"-f", "bestvideo[height<=720]+bestaudio/best", "--merge-output-format", "mp4", "-o", outputTemplate, url}
+	case "480p Video":
+		args = []string{"-f", "bestvideo[height<=480]+bestaudio/best", "--merge-output-format", "mp4", "-o", outputTemplate, url}
+	case "Audio Only (MP3)":
+		args = []string{"-f", "bestaudio/best", "-x", "--audio-format", "mp3", "-o", outputTemplate, url}
+	default:
+		args = []string{"-f", "bestvideo+bestaudio/best", "--merge-output-format", "mp4", "-o", outputTemplate, url}
+	}
+
+	args = append(args, "--no-playlist", "--newline", "-o", outputTemplate, url)
+
+	cmd := exec.Command(ytdlpPath, args...)
+	cmd.SysProcAttr = hideWindowSysProcAttr
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	progressRegex := regexp.MustCompile(`\[download\]\s+(\d+\.?\d*)%`)
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		matches := progressRegex.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			if percent, err := strconv.ParseFloat(matches[1], 64); err == nil {
+				updateProgress(percent / 100.0)
+			}
+		}
+	}
+
+	return cmd.Wait()
 }
