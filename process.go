@@ -53,7 +53,7 @@ func getToolPath(toolName string) string {
 	return filepath.Join(tempToolsDir, toolName)
 }
 
-func compressVideo(inputPath, outputPath, targetSizeStr string) error {
+func compressVideo(inputPath, outputPath, targetSizeStr string, updateProgress func(progress float64)) error {
 	ffmpegPath := getToolPath("ffmpeg.exe")
 	ffprobePath := getToolPath("ffprobe.exe")
 
@@ -84,9 +84,35 @@ func compressVideo(inputPath, outputPath, targetSizeStr string) error {
 		videoBitrate = 100
 	}
 
-	cmd := exec.Command(ffmpegPath, "-i", inputPath, "-b:v", fmt.Sprintf("%.0fk", videoBitrate), "-b:a", fmt.Sprintf("%.0fk", audioBitrate), "-y", outputPath)
+	cmd := exec.Command(ffmpegPath, "-i", inputPath, "-b:v", fmt.Sprintf("%.0fk", videoBitrate), "-b:a", fmt.Sprintf("%.0fk", audioBitrate), "-progress", "pipe:1", "-nostats", "-y", outputPath)
 	cmd.SysProcAttr = hideWindowSysProcAttr
-	return cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "out_time_us=") {
+			usStr := strings.TrimPrefix(line, "out_time_us=")
+			if us, err := strconv.ParseFloat(usStr, 64); err == nil {
+				progress := (us / 1000000.0) / durationSec
+				if progress > 1.0 {
+					progress = 1.0
+				} else if progress < 0 {
+					progress = 0
+				}
+				updateProgress(progress)
+			}
+		}
+	}
+
+	return cmd.Wait()
 }
 
 func processPhotoFile(inputPath, outputPath, widthStr, heightStr string) error {

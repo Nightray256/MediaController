@@ -19,6 +19,9 @@ func buildVideoUI(w fyne.Window) fyne.CanvasObject {
 	sizeEntry.SetPlaceHolder("Enter target size in MB")
 	videoStatusLabel := widget.NewLabel("Status: Ready")
 
+	videoProgressBar := widget.NewProgressBar()
+	videoProgressBar.SetValue(0.0)
+
 	selectVideoBtn := widget.NewButton("Select Video File", func() {
 		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 			if err != nil || reader == nil {
@@ -43,19 +46,30 @@ func buildVideoUI(w fyne.Window) fyne.CanvasObject {
 		}
 
 		videoStatusLabel.SetText("Status: Compressing... It may take a few minutes.")
+		videoProgressBar.SetValue(0.0)
 
 		ext := filepath.Ext(selectedVideoPath)
 		base := selectedVideoPath[0 : len(selectedVideoPath)-len(ext)]
 		outputPath := fmt.Sprintf("%s_compressed%s", base, ext)
 
 		go func() {
-			err := compressVideo(selectedVideoPath, outputPath, targetSize)
+			err := compressVideo(selectedVideoPath, outputPath, targetSize, func(progress float64) {
+				videoProgressBar.SetValue(progress)
+			})
+
 			if err != nil {
 				videoStatusLabel.SetText(fmt.Sprintf("Status: Compression failed: (%v)", err))
 				dialog.ShowError(err, w)
+				videoProgressBar.SetValue(0.0)
 			} else {
 				videoStatusLabel.SetText("Status: Compression completed.")
-				dialog.ShowInformation("Compression completed", fmt.Sprintf("Compressed video \nsaved to: %s", outputPath), w)
+
+				successDialog := dialog.NewInformation("Compression completed", fmt.Sprintf("Compressed video \nsaved to: %s", outputPath), w)
+				successDialog.SetOnClosed(func() {
+					videoProgressBar.SetValue(0.0)
+					sizeEntry.SetText("")
+				})
+				successDialog.Show()
 			}
 		}()
 	})
@@ -69,6 +83,7 @@ func buildVideoUI(w fyne.Window) fyne.CanvasObject {
 		sizeEntry,
 		widget.NewLabel(""),
 		compressVideoBtn,
+		videoProgressBar,
 		videoStatusLabel,
 	)
 }
