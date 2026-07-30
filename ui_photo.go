@@ -24,6 +24,9 @@ func buildPhotoUI(w fyne.Window) fyne.CanvasObject {
 	photoFileLabel := widget.NewLabel("No file selected")
 	photoStatusLabel := widget.NewLabel("Status: Ready")
 
+	photoProgressBar := widget.NewProgressBar()
+	photoProgressBar.SetValue(0.0)
+
 	widthEntry := widget.NewEntry()
 	widthEntry.SetPlaceHolder("Width (px)")
 	heightEntry := widget.NewEntry()
@@ -97,20 +100,30 @@ func buildPhotoUI(w fyne.Window) fyne.CanvasObject {
 			dialog.ShowInformation("Missing dimensions", "Please enter both width and height.", w)
 			return
 		}
+
 		photoStatusLabel.SetText("Status: Processing...")
+		photoProgressBar.SetValue(0.0)
 
 		ext := filepath.Ext(selectedPhotoPath)
 		base := selectedPhotoPath[0 : len(selectedPhotoPath)-len(ext)]
 		outputPath := fmt.Sprintf("%s_resized%s", base, ext)
 
 		go func() {
-			err := processPhotoFile(selectedPhotoPath, outputPath, targetW, targetH)
+			err := processPhotoFile(selectedPhotoPath, outputPath, targetW, targetH, func(progress float64) {
+				photoProgressBar.SetValue(progress)
+			})
+
 			if err != nil {
 				photoStatusLabel.SetText(fmt.Sprintf("Status: Processing failed: (%v)", err))
+				photoProgressBar.SetValue(0.0)
 				dialog.ShowError(err, w)
 			} else {
 				photoStatusLabel.SetText("Status: Processing completed.")
-				dialog.ShowInformation("Processing completed", fmt.Sprintf("Processed photo \nsaved to: %s", outputPath), w)
+				successDialog := dialog.NewInformation("Processing completed", fmt.Sprintf("Processed photo \nsaved to: %s", outputPath), w)
+				successDialog.SetOnClosed(func() {
+					photoProgressBar.SetValue(0.0)
+				})
+				successDialog.Show()
 			}
 		}()
 	})
@@ -124,6 +137,7 @@ func buildPhotoUI(w fyne.Window) fyne.CanvasObject {
 		container.NewGridWithColumns(2, widthEntry, heightEntry),
 		keepRatioCheck,
 		processPhotoBtn,
+		photoProgressBar,
 		photoStatusLabel,
 	)
 }

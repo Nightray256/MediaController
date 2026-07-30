@@ -115,17 +115,29 @@ func compressVideo(inputPath, outputPath, targetSizeStr string, updateProgress f
 	return cmd.Wait()
 }
 
-func processPhotoFile(inputPath, outputPath, widthStr, heightStr string) error {
+func processPhotoFile(inputPath, outputPath, widthStr, heightStr string, updateProgress func(progress float64)) error {
 	ffmpegPath := getToolPath("ffmpeg.exe")
 
 	if _, err := os.Stat(ffmpegPath); os.IsNotExist(err) {
 		return fmt.Errorf("ffmpeg.exe not found in tools folder")
 	}
 
+	updateProgress(0.1)
+
 	scaleArg := fmt.Sprintf("scale=%s:%s", widthStr, heightStr)
 	cmd := exec.Command(ffmpegPath, "-i", inputPath, "-vf", scaleArg, "-y", outputPath)
 	cmd.SysProcAttr = hideWindowSysProcAttr
-	return cmd.Run()
+
+	updateProgress(0.5)
+
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	updateProgress(1.0)
+
+	return nil
 }
 
 func downloadYTVideo(url, outputFolder, formatChoice string, updateProgress func(progress float64)) error {
