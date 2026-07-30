@@ -2,7 +2,6 @@ package main
 
 import (
 	_ "embed"
-	"fmt"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -13,20 +12,12 @@ import (
 var iconBytes []byte
 
 func main() {
-
-	if err := initTools(); err != nil {
-		fmt.Printf("Failed to initialize tools: %v\n", err)
-		return
-	}
-
-	defer cleanupTools()
-
 	a := app.NewWithID("iRay")
 
 	icon := fyne.NewStaticResource("icon", iconBytes)
 	a.SetIcon(icon)
 
-	w := a.NewWindow("Media Controller")
+	w := a.NewWindow("Media ToolBox")
 	w.Resize(fyne.NewSize(680, 520))
 
 	tabs := container.NewAppTabs(

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -39,9 +40,14 @@ func buildVideoUI(w fyne.Window) fyne.CanvasObject {
 			dialog.ShowInformation("No file selected", "Please select a video file first.", w)
 			return
 		}
-		targetSize := sizeEntry.Text
-		if targetSize == "" {
+
+		targetSizeStr := sizeEntry.Text
+		if targetSizeStr == "" {
 			dialog.ShowInformation("Missing target size", "Please enter a target size in MB.", w)
+			return
+		}
+		if _, err := strconv.ParseFloat(targetSizeStr, 64); err != nil {
+			dialog.ShowInformation("Invalid input", "Target size must be a valid number.", w)
 			return
 		}
 
@@ -53,7 +59,7 @@ func buildVideoUI(w fyne.Window) fyne.CanvasObject {
 		outputPath := fmt.Sprintf("%s_compressed%s", base, ext)
 
 		go func() {
-			err := compressVideo(selectedVideoPath, outputPath, targetSize, func(progress float64) {
+			err := compressVideo(selectedVideoPath, outputPath, targetSizeStr, func(progress float64) {
 				videoProgressBar.SetValue(progress)
 			})
 
@@ -63,7 +69,6 @@ func buildVideoUI(w fyne.Window) fyne.CanvasObject {
 				videoProgressBar.SetValue(0.0)
 			} else {
 				videoStatusLabel.SetText("Status: Compression completed.")
-
 				successDialog := dialog.NewInformation("Compression completed", fmt.Sprintf("Compressed video \nsaved to: %s", outputPath), w)
 				successDialog.SetOnClosed(func() {
 					videoProgressBar.SetValue(0.0)

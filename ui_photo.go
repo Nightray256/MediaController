@@ -94,10 +94,11 @@ func buildPhotoUI(w fyne.Window) fyne.CanvasObject {
 			return
 		}
 
-		targetW := widthEntry.Text
-		targetH := heightEntry.Text
-		if targetW == "" || targetH == "" {
-			dialog.ShowInformation("Missing dimensions", "Please enter both width and height.", w)
+		targetW, errW := strconv.Atoi(widthEntry.Text)
+		targetH, errH := strconv.Atoi(heightEntry.Text)
+
+		if errW != nil || errH != nil || targetW <= 0 || targetH <= 0 {
+			dialog.ShowInformation("Invalid dimensions", "Width and height must be positive integer numbers.", w)
 			return
 		}
 
@@ -112,11 +113,10 @@ func buildPhotoUI(w fyne.Window) fyne.CanvasObject {
 			err := processPhotoFile(selectedPhotoPath, outputPath, targetW, targetH, func(progress float64) {
 				photoProgressBar.SetValue(progress)
 			})
-
 			if err != nil {
 				photoStatusLabel.SetText(fmt.Sprintf("Status: Processing failed: (%v)", err))
-				photoProgressBar.SetValue(0.0)
 				dialog.ShowError(err, w)
+				photoProgressBar.SetValue(0.0)
 			} else {
 				photoStatusLabel.SetText("Status: Processing completed.")
 				successDialog := dialog.NewInformation("Processing completed", fmt.Sprintf("Processed photo \nsaved to: %s", outputPath), w)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"embed"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,44 +12,15 @@ import (
 	"syscall"
 )
 
-//go:embed tools/*
-var toolsFS embed.FS
-
 var hideWindowSysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
-var tempToolsDir string
-
-func initTools() error {
-	dir, err := os.MkdirTemp("", "MediaControllerTools-*")
-	if err != nil {
-		return err
-	}
-	tempToolsDir = dir
-
-	files := []string{"ffmpeg.exe", "ffprobe.exe", "yt-dlp.exe"}
-	for _, file := range files {
-		data, err := toolsFS.ReadFile("tools/" + file)
-		if err != nil {
-			return fmt.Errorf("failed to read embedded tool %s: %v", file, err)
-		}
-
-		outPath := filepath.Join(tempToolsDir, file)
-		err = os.WriteFile(outPath, data, 0777)
-		if err != nil {
-			return fmt.Errorf("failed to write tool to temp: %v", err)
-		}
-	}
-	return nil
-}
-
-func cleanupTools() {
-	if tempToolsDir != "" {
-		os.RemoveAll(tempToolsDir)
-	}
-}
-
 func getToolPath(toolName string) string {
-	return filepath.Join(tempToolsDir, toolName)
+	exePath, err := os.Executable()
+	if err != nil {
+		return toolName
+	}
+	exeDir := filepath.Dir(exePath)
+	return filepath.Join(exeDir, toolName)
 }
 
 func compressVideo(inputPath, outputPath, targetSizeStr string, updateProgress func(progress float64)) error {
@@ -58,7 +28,7 @@ func compressVideo(inputPath, outputPath, targetSizeStr string, updateProgress f
 	ffprobePath := getToolPath("ffprobe.exe")
 
 	if _, err := os.Stat(ffmpegPath); os.IsNotExist(err) {
-		return fmt.Errorf("ffmpeg.exe not found in tools folder")
+		return fmt.Errorf("ffmpeg.exe not found in the same folder")
 	}
 
 	targetSizeMB, err := strconv.ParseFloat(targetSizeStr, 64)
@@ -115,16 +85,16 @@ func compressVideo(inputPath, outputPath, targetSizeStr string, updateProgress f
 	return cmd.Wait()
 }
 
-func processPhotoFile(inputPath, outputPath, widthStr, heightStr string, updateProgress func(progress float64)) error {
+func processPhotoFile(inputPath, outputPath string, targetW, targetH int, updateProgress func(progress float64)) error {
 	ffmpegPath := getToolPath("ffmpeg.exe")
 
 	if _, err := os.Stat(ffmpegPath); os.IsNotExist(err) {
-		return fmt.Errorf("ffmpeg.exe not found in tools folder")
+		return fmt.Errorf("ffmpeg.exe not found in the same folder")
 	}
 
 	updateProgress(0.1)
 
-	scaleArg := fmt.Sprintf("scale=%s:%s", widthStr, heightStr)
+	scaleArg := fmt.Sprintf("scale=%d:%d", targetW, targetH)
 	cmd := exec.Command(ffmpegPath, "-i", inputPath, "-vf", scaleArg, "-y", outputPath)
 	cmd.SysProcAttr = hideWindowSysProcAttr
 
@@ -136,7 +106,6 @@ func processPhotoFile(inputPath, outputPath, widthStr, heightStr string, updateP
 	}
 
 	updateProgress(1.0)
-
 	return nil
 }
 
@@ -144,7 +113,7 @@ func downloadYTVideo(url, outputFolder, formatChoice string, updateProgress func
 	ytdlpPath := getToolPath("yt-dlp.exe")
 
 	if _, err := os.Stat(ytdlpPath); os.IsNotExist(err) {
-		return fmt.Errorf("yt-dlp.exe not found in tools folder")
+		return fmt.Errorf("yt-dlp.exe not found in the same folder")
 	}
 
 	outputTemplate := filepath.Join(outputFolder, "%(title)s.%(ext)s")

@@ -20,12 +20,13 @@ func buildYoutubeUI(w fyne.Window) fyne.CanvasObject {
 	ytProgressBar.SetValue(0.0)
 
 	formatSelect := widget.NewSelect([]string{
+		"Best Video (Auto)",
 		"1080p Video",
 		"720p Video",
 		"480p Video",
 		"Audio Only (MP3)",
 	}, nil)
-	formatSelect.SetSelected("1080p Video")
+	formatSelect.SetSelected("Best Video (Auto)")
 
 	selectFolderBtn := widget.NewButton("Select Download Folder", func() {
 		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
@@ -64,14 +65,11 @@ func buildYoutubeUI(w fyne.Window) fyne.CanvasObject {
 				ytProgressBar.SetValue(0.0)
 			} else {
 				ytStatusLabel.SetText("Status: Download completed.")
-
 				successDialog := dialog.NewInformation("Download completed", "Video has been saved successfully.", w)
-
 				successDialog.SetOnClosed(func() {
 					ytProgressBar.SetValue(0.0)
 					ytUrlEntry.SetText("")
 				})
-
 				successDialog.Show()
 			}
 		}()
